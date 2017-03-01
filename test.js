@@ -15,19 +15,21 @@ if (!window) {
   }
 }
 
-load('debug.js');
 load('utils.js');
 load('classes.js');
 load("serialize.js");
 load('tweetnacl-js.js');
+load('sc4.js');
 load('ratchet.js');
+load('debug.js');
 
 // Test serialization
-checkSerializationHash('GK1hEqbjz6ezFPBDU5njwX');
+checkSerializationHash($SERIALIZATION_HASH);
 var k1 = randomSC4Key();
 var v = k1.pubkeys.serialize();
-var k2 = deserialize(v)[0];
+var k2 = v.deserialize()[0];
 assert(k1.id() == k2.id());
+print(now().serialize().deserialize()[0].toString());
 
 // Test encryption
 v = nacl.randomBytes(Math.round(100*Math.random()+1));
@@ -40,6 +42,11 @@ assert(u8a_cmp(v, v2)==0);
 var msg = nacl.randomBytes(32);
 var sig = k1.sign(msg);
 assert(sig.verify());
+
+var b = new sc4_bundle({
+  filename: 'foo.txt', mimetype: 'text/plain', content: hashref(msg)});
+var sig1 = b.sign(k1);
+assert(sig1.verify());
 
 // Test X3DH
 var alice = makeSC4User('Alice');

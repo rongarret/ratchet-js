@@ -34,3 +34,17 @@ Uint8Array.prototype.toString = function () {
 Array.prototype.toString = function () {
   return '(' + this.map(function(item) { return ''+item; }).join(' ') + ')';
 };
+
+function show(thing) {
+  if (isa (thing, stdObject)) thing.show();
+  else print(typeOf(thing) + ': ' + thing);
+}
+
+defmethod('show', stdObject, function() {
+  print(typeOf(this) + ' ' + this._id + ':');
+  for (var k in this.slots()) {
+    putstr(k + ": ");
+    show(this[k]);
+    print();
+  }
+});

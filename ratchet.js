@@ -1,87 +1,5 @@
 'use strict';
 
-function toOctets(thing) { return thing.toOctets(); }
-
-defmethod('toOctets', String, function() { return stringToOctets(this); });
-
-defmethod('toOctets', Uint8Array, function() { return this; });
-
-function hash(thing) { return nacl.hash(thing.toOctets()); }
-
-//////////
-//
-//  Keys
-//
-function keysFromSeed(seed) {
-  var seed = hash(seed).slice(0,32);
-  var skpr = nacl.sign.keyPair.fromSeed(seed);
-  var h = nacl.hash(seed).slice(0,32);
-  h[0] &= 248;
-  h[31] &= 127;
-  h[31] |= 64;
-  var ekpr = nacl.box.keyPair.fromSecretKey(h);
-  return { epk : ekpr.publicKey,
-	   esk : ekpr.secretKey,
-	   spk : skpr.publicKey,
-	   ssk : skpr.secretKey }
-}
-
-defclass("sc4_public_key", {spk: null, epk: null});
-
-defmethod('id', sc4_public_key, function() {
-  return this.epk && b58(this.epk).slice(0,16);
-});
-
-defclass("sc4_secret_key", {ssk: null, esk: null, pubkeys: null});
-
-defmethod('id', sc4_secret_key, function() {
-  return this.pubkeys && this.pubkeys.id();
-});
-
-function SC4Key(seed) {
-  var keys = keysFromSeed(seed);
-  var pk = new sc4_public_key({epk: keys.epk, spk: keys.spk});
-  return new sc4_secret_key({esk: keys.esk, ssk: keys.ssk, pubkeys: pk});
-}
-
-function randomSC4Key() {
-  return SC4Key(nacl.randomBytes(32));
-}
-
-////////////////////////
-//
-// Symmetric encryption
-//
-var Z24 = fill(new Uint8Array(24), 0);
-
-function encrypt(msg, key, nonce) {
-  if (isa(key, sc4_secret_key)) key = key.esk;
-  return nacl.secretbox(msg.toOctets(), nonce || Z24, key);
-}
-
-function decrypt(v, key, nonce) {
-  if (isa(key, sc4_secret_key)) key = key.esk;
-  var msg = nacl.secretbox.open(v, nonce || Z24, key);
-  if (!msg) error("Decryption failed");
-  return msg;
-}
-
-////////////////
-//
-//  Signatures
-//
-defclass('signature', {spk: null, thing: null, sig:null});
-
-defmethod('sign', sc4_secret_key, function(thing) {
-  thing = thing.toOctets();
-  var sig = nacl.sign.detached(thing, this.ssk);
-  return new signature( { spk: this.pubkeys.spk, thing: thing, sig: sig } );
-});
-
-defmethod('verify', signature, function() {
-  return nacl.sign.detached.verify(this.thing, this.sig, this.spk);
-});
-
 //////////////////
 //
 //  HKDF
@@ -244,7 +162,7 @@ defmethod('init_for_rx', ratchet_session, function(recipient, hdr) {
   this.reset({user: recipient});
   this.dhs = recipient.idk;
   var msg;
-  if (isa(hdr, Uint8Array)) [hdr, msg] = deserialize(hdr);
+  if (isa(hdr, Uint8Array)) [hdr, msg] = hdr.deserialize();
   var sk = recipient.x3dh_rx(hdr);
   this.rk = sk;
   return msg ? decrypt(msg, sk) : true;
@@ -274,7 +192,7 @@ function pk_equal(pk1, pk2) {
 }
 
 defmethod('decrypt', ratchet_session, function(hdr, ciphertext) {
-  if (isa(hdr, Uint8Array)) [hdr, ciphertext] = deserialize(hdr);
+  if (isa(hdr, Uint8Array)) [hdr, ciphertext] = hdr.deserialize();
   checkType(hdr, ratchet_header);
   var msg = this.trySkippedMsgKeys(hdr, ciphertext);
   if (msg) return msg;
@@ -335,6 +253,7 @@ defmethod('dhRatchet', ratchet_session, function(pk) {
 // Serialization interface
 //
 $SERIALIZABLE_CLASSES = [
-  sc4_public_key, x3dh_header, ratchet_header, signature, key_bundle];
+  sc4_public_key, sc4_bundle, sc4_signature, sc4_hashref,
+  x3dh_header, ratchet_header, key_bundle];
 
-$SERIALIZATON_HASH = "5RP6tvVXwTsCPsUMid9AMx";
+$SERIALIZATION_HASH = serializationHash();

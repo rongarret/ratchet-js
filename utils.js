@@ -112,8 +112,20 @@ function integerToNOctets(n, nBytes) {
 
 function octetsToInteger(bytes) {
   var n = 0;
-  for (var i=0; i<bytes.length; i++) n = (n<<8) + bytes[i];
+  for (var i=0; i<bytes.length; i++) n = (n*256) + bytes[i];
   return n;
+}
+
+var $EPOCH = (new Date(1900,0,0,0,0,0)).valueOf();
+
+function dateToOctets(date, epoch) {
+  epoch = epoch || $EPOCH;
+  return integerToOctets(Math.round((date.valueOf() - epoch) / 1000));
+}
+
+function octetsToDate(v, epoch) {
+  epoch = epoch || $EPOCH;
+  return new Date((octetsToInteger(v) * 1000) + epoch);
 }
 
 function u8a_cmp(a1, a2) {
@@ -217,8 +229,9 @@ function u8aConcat(u8aList) {
   var a = new u8aList[0].constructor(len);
   len = 0;
   for (var i=0; i<u8aList.length; i++) {
-    a.set(u8aList[i], len);
-    len += u8aList[i].length;
+    var v = u8aList[i].toOctets();
+    a.set(v, len);
+    len += v.length;
   }
   return a;
 }
@@ -252,3 +265,5 @@ Uint8Array.prototype.slice = function(start, end) {
   else if (end<0) end = this.length + end;
   return this.subarray(start, end);
 };
+
+function now() { return new Date(); }

@@ -10,7 +10,7 @@ function serializeLength(len) {
 }
 
 function setTypeTag(v, tag) {
-  v[0] = v[0] | (tag<<5);
+  v[0] = (v[0] & 0x1F) | (tag<<5);
   return v;
 }
 
@@ -32,13 +32,22 @@ defmethod('serialize', Array, function () {
   return concat.apply(null, l);
 });
 
+defmethod('serialize', Date, function () {
+  return setTypeTag(dateToOctets(this).serialize(), 4);
+});
+
 function serialize(thing) {
-  print("WARNING: Serialize is deprecated.  Use thing.serialize instead.");
+  print("WARNING: serialize is deprecated.  Use thing.serialize instead.");
   return thing.serialize();
 }
 
+function deserialize(thing) {
+  print("WARNING: deserialize is deprecated.  Use thing.deserialize instead.");
+  return thing.deserialize();
+}
+
 // Set these after all serializable classes have been defined
-var $SERIALIZABLE_CLASSES, $SERIALIZATON_HASH;
+var $SERIALIZABLE_CLASSES, $SERIALIZATION_HASH;
 
 function serializationHash() {
   function classSerializationSpec(cls) {
@@ -66,7 +75,11 @@ defmethod('serialize', stdObject, function() {
   return concat(setTypeTag(octets(idx), 7), vals.serialize());
 });
 
-function deserialize(v) {
+defmethod('deserialize', Uint8Array, function() {
+  return deserializeOctets(this);
+});
+
+function deserializeOctets(v) {
   var tag = v[0];
   var type = tag>>>5;
   if (type==7) return deserializeObject(v);
@@ -82,6 +95,7 @@ function deserialize(v) {
   if (type==0) result = data;
   else if (type==1) result = octetsToInteger(data);
   else if (type==2) result = octetsToString(data);
+  else if (type==4) result = octetsToDate(data);
   else throw("Unknown type tag: " + type);
   return [result, v.subarray(end)];
 }
@@ -91,7 +105,7 @@ function deserializeObject(v) {
   var cls = $SERIALIZABLE_CLASSES[idx];
   if (!cls) throw("Unknown deserialization class index: " + idx);
   var slotNames = Object.keys(cls._slots);
-  var [slotValues, v] = deserialize(v.subarray(1));
+  var [slotValues, v] = v.slice(1).deserialize();
   if (slotNames.length != slotValues.length) error(
     fmt("Deserialization error: expected % slot values, got %",
 	slotNames.length, slotValues.length));
@@ -103,7 +117,7 @@ function deserializeObject(v) {
 function deserializeList(v, cnt) {
   var l = new Array(cnt);
   for (var i=0; i<cnt; i++) {
-    var [v1, v] = deserialize(v);
+    var [v1, v] = v.deserialize();
     l[i] = v1;
   }
   return [l, v];
